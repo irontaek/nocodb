@@ -1485,17 +1485,18 @@ export class DataTableService {
     targetList: Record<string, any>[],
     relatedModel: Model,
   ): (string | number)[] {
+    // Index the target rows by their composite primary key so the "not already in
+    // target" check is O(1) instead of a targetList.some scan per source row —
+    // otherwise this is O(sourceRows × targetRows × pkCount).
+    const pkCols = relatedModel.primaryKeys.map(
+      (key) => key.title || key.column_name,
+    );
+    const rowKey = (row: Record<string, any>) =>
+      JSON.stringify(pkCols.map((col) => row[col]));
+    const targetKeys = new Set(targetList.map(rowKey));
+
     return sourceList
-      .filter(
-        (sourceRow: Record<string, any>) =>
-          !targetList.some((targetRow: Record<string, any>) =>
-            relatedModel.primaryKeys.every(
-              (key) =>
-                sourceRow[key.title || key.column_name] ===
-                targetRow[key.title || key.column_name],
-            ),
-          ),
-      )
+      .filter((sourceRow: Record<string, any>) => !targetKeys.has(rowKey(sourceRow)))
       .map((item: Record<string, any>) =>
         dataWrapper(item).extractPksValue(relatedModel, true),
       );
